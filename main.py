@@ -99,6 +99,7 @@ def ctqa_emoji(name):
 @bot.event
 async def on_ready():
     print(f"@{bot.user} is now online")
+    await bot.change_presence(activity=disnake.Activity(type=disnake.ActivityType.watching, name="Cat Bot sanity"))
     folder_path = os.path.join(os.path.dirname(__file__), "spawn config")
     while True:
         for list in pickle.load(open("ctqa channels.dat", "rb")):
