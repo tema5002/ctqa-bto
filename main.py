@@ -52,7 +52,12 @@ def get_cat():
     if len(CAT_TYPES) == 0: makecatlist()
     return CAT_TYPES.pop(random.randrange(len(CAT_TYPES)))
 
-def get_user_cats(server_id, member_id):
+def get_user_cats(*args):
+    if len(args)==2: server_id, member_id = args
+    else:
+        arg = args[0]
+        server_id = arg.guild.id
+        member_id = arg.author.id
     filepath = os.path.join(os.path.dirname(__file__), "cats")
     if not os.path.exists(filepath): os.makedirs(filepath)
     filepath = os.path.join(filepath, str(server_id))
@@ -62,7 +67,11 @@ def get_user_cats(server_id, member_id):
         return pickle.load(open(filepath, "rb"))
     return {}
 
-def save_user_cats(server_id, member_id, cats):
+def save_user_cats(*args):
+    if len(args)==3: server_id, member_id, cats = args
+    else:
+        server_id, member_id = args[0].guild.id, args[0].author.id
+        cats = args[1]
     filepath = os.path.join(os.path.dirname(__file__), "cats", str(server_id), f"{member_id}.dat")
     pickle.dump(cats, open(filepath, "wb"))
 
@@ -81,11 +90,14 @@ def give_custom_cat(member_id, cat_type, amount):
     filepath = os.path.join(os.path.dirname(__file__), "custom cats", f"{member_id}.dat")
     pickle.dump(cats, open(filepath, "wb"))
 
-def givecat(server_id, member_id, cat_type, amount):
-    cats = get_user_cats(server_id, member_id)
+def givecat(*args):
+    interaction = args[0]
+    cat_type = args[1]
+    amount = args[2]
+    cats = get_user_cats(interaction)
     if cat_type in cats: cats[cat_type] += amount
     else: cats[cat_type] = amount
-    save_user_cats(server_id, member_id, cats)
+    save_user_cats(interaction, cats)
 
 def emoji(name):
     return str(disnake.utils.get(bot.get_guild(1178285875608698951).emojis, name=name))
@@ -139,13 +151,13 @@ async def on_message(message):
             then = ctqamessage.created_at.timestamp()
             time = round(abs(current_time-then)*100)/100
 
-            cats = get_user_cats(message.guild.id, message.author.id)
+            cats = get_user_cats(message)
             if not "fastest_catch" in cats:  cats["fastest_catch"] = time
             elif cats["fastest_catch"]>time: cats["fastest_catch"] = time
 
             if not "slowest_catch" in cats:  cats["slowest_catch"] = time
             elif cats["slowest_catch"]<time: cats["slowest_catch"] = time
-            save_user_cats(message.guild.id, message.author.id, cats)
+            save_user_cats(message, cats)
 
             days = int(time//86400)
             hours= int(time//3600%24)
@@ -164,7 +176,7 @@ async def on_message(message):
             try: await message.delete()
             except: pass
             cat_type = catlist[0]
-            givecat(message.guild.id, message.author.id, cat_type, 1)
+            givecat(message, cat_type, 1)
             await message.channel.send(f"{message.author.mention} caught a {ctqa_emoji(cat_type)} **{cat_type} Ctqa** in **{caught_time}**!\n"+\
                                        f"They now have **{get_user_cats(message.guild.id, message.author.id)[cat_type]} {cat_type} Ctqas** in their inventory.")
         else:
