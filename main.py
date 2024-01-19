@@ -108,6 +108,84 @@ def ctqa_emoji(name):
     else: catemoji = disnake.utils.get(bot.get_guild(1178285875608698951).emojis, name=f"{name}ctqa") or "emoji fail"
     return catemoji
 
+def get_lb(ctx, lb_type):
+    folder_path = os.path.join(os.path.dirname(__file__), "cats")
+    if not os.path.exists(folder_path): os.makedirs(folder_path)
+    folder_path = os.path.join(folder_path, str(ctx.guild.id))
+    if not os.path.exists(folder_path): os.makedirs(folder_path)
+    lb = {}
+    if lb_type == "Cats":
+        for file in os.listdir(folder_path):
+            cats_counter = 0
+            inv = get_user_cats(ctx.guild.id, file.removesuffix(".dat"))
+            for type in cat_types:
+                if type in inv:
+                    cats_counter += inv[type]
+            lb[int(file.removesuffix(".dat"))] = cats_counter
+        lb = sorted(lb.items(), key=lambda x:x[1], reverse=True)
+        if len(lb)>15: lb=lb[:15]
+        lb = dict(lb)
+        description = ""
+        counter = 1
+        for k, v in lb.items():
+            description += f"{counter}. {v} ctqas: <@{k}>\n"
+            counter += 1
+        return disnake.Embed(title=f"{ctx.guild.name} ctqa leaderboards:", description=description)
+    elif lb_type == "Fastest":
+        for file in os.listdir(folder_path):
+            inv = get_user_cats(ctx.guild.id, file.removesuffix(".dat"))
+            if "fastest_catch" in inv:
+                lb[int(file.removesuffix(".dat"))] = str(inv["fastest_catch"])
+            else:
+                lb[int(file.removesuffix(".dat"))] = "Unknown"
+        lb = sorted(lb.items(), key=lambda x:x[1])
+        if len(lb)>15: lb=lb[:15]
+        lb = dict(lb)
+        description = ""
+        counter = 1
+        for k, v in lb.items():
+            description += f"{counter}. {v}s: <@{k}>\n"
+            counter += 1
+        return disnake.Embed(title=f"{ctx.guild.name} fastest catches leaderboards:", description=description)
+    elif lb_type == "Slowest":
+        for file in os.listdir(folder_path):
+            inv = get_user_cats(ctx.guild.id, file.removesuffix(".dat"))
+            if "slowest_catch" in inv:
+                lb[int(file.removesuffix(".dat"))] = str(inv["slowest_catch"])
+        lb = sorted(lb.items(), key=lambda x:x[1], reverse=True)
+        if len(lb)>15: lb=lb[:15]
+        lb = dict(lb)
+        description = ""
+        counter = 1
+        for k, v in lb.items():
+            description += f"{counter}. {v}h: <@{k}>\n"
+            counter += 1
+        return disnake.Embed(title=f"{ctx.guild.name} slowest catches leaderboards:", description=description)
+
+def lb_components(h):
+    components = []
+    if h=="Cats":
+        components+=[disnake.ui.Button(label="Refresh", style=disnake.ButtonStyle.success, custom_id="UPDATELB;Cats")]
+        components+=[disnake.ui.Button(label="Fastest", style=disnake.ButtonStyle.primary, custom_id="UPDATELB;Fastest")]
+        components+=[disnake.ui.Button(label="Slowest", style=disnake.ButtonStyle.primary, custom_id="UPDATELB;Slowest")]
+    elif h=="Fastest":
+        components+=[disnake.ui.Button(label="Cats", style=disnake.ButtonStyle.primary, custom_id="UPDATELB;Cats")]
+        components+=[disnake.ui.Button(label="Refresh", style=disnake.ButtonStyle.success, custom_id="UPDATELB;Fastest")]
+        components+=[disnake.ui.Button(label="Slowest", style=disnake.ButtonStyle.primary, custom_id="UPDATELB;Slowest")]
+    elif h=="Slowest":
+        components+=[disnake.ui.Button(label="Cats", style=disnake.ButtonStyle.primary, custom_id="UPDATELB;Cats")]
+        components+=[disnake.ui.Button(label="Fastest", style=disnake.ButtonStyle.primary, custom_id="UPDATELB;Fastest")]
+        components+=[disnake.ui.Button(label="Refresh", style=disnake.ButtonStyle.success, custom_id="UPDATELB;Slowest")]
+    return components
+
+@bot.listen("on_button_click")
+async def help_listener(ctx):
+    h = ctx.component.custom_id
+    t = h.split(";")
+    if t[0]=="UPDATELB":
+        embed = get_lb(ctx, t[1])
+    await ctx.response.edit_message(embed=embed, components=lb_components(t[1]))
+
 @bot.event
 async def on_ready():
     print(f"@{bot.user} is now online")
@@ -116,16 +194,19 @@ async def on_ready():
     while True:
         for list in pickle.load(open("ctqa channels.dat", "rb")):
             guild_id, channel_id = list
-            channel = await bot.get_guild(guild_id).fetch_channel(channel_id)
-            cat = get_cat()
-            cat_emoji = ctqa_emoji(cat)
-            cat_list = pickle.load(open("ctqas.dat", "rb"))
-            if not channel_id in cat_list:
-                msg = await channel.send(f"A wild {cat_emoji} **{cat} Ctqa** just appeared! Type \"ctqa\" to catch it!", file = disnake.File("syating_ctqa.webp"))
-                cat_list[channel_id] = [cat, msg.id]
-                print(type(cat_list))
-                print(cat_list)
-                pickle.dump(cat_list, open("ctqas.dat", "wb"))
+            server = bot.get_guild(guild_id)
+            if server:
+                channel = await server.fetch_channel(channel_id)
+                if channel:
+                    cat_list = pickle.load(open("ctqas.dat", "rb"))
+                    if not channel_id in cat_list:
+                        cat = get_cat()
+                        cat_emoji = ctqa_emoji(cat)
+                        msg = await channel.send(f"A wild {cat_emoji} **{cat} Ctqa** just appeared! Type \"ctqa\" to catch it!", file = disnake.File("syating_ctqa.webp"))
+                        cat_list[channel_id] = [cat, msg.id]
+                        print(type(cat_list))
+                        print(cat_list)
+                        pickle.dump(cat_list, open("ctqas.dat", "wb"))
         await asyncio.sleep(random.randint(30, 60*5))
 
 @bot.event
@@ -152,11 +233,14 @@ async def on_message(message):
             time = round(abs(current_time-then)*100)/100
 
             cats = get_user_cats(message)
-            if not "fastest_catch" in cats:  cats["fastest_catch"] = time
-            elif cats["fastest_catch"]>time: cats["fastest_catch"] = time
+            if "fastest_catch" in cats:
+                if cats["fastest_catch"]<time: cats["fastest_catch"] = time
+            else: cats["fastest_catch"] = time
 
-            if not "slowest_catch" in cats:  cats["slowest_catch"] = time
-            elif cats["slowest_catch"]<time: cats["slowest_catch"] = time
+            slowest_catch = round(time/3600*100)/100
+            if "slowest_catch" in cats:
+                if cats["slowest_catch"]<slowest_catch: cats["slowest_catch"] = slowest_catch
+            else: cats["slowest_catch"] = slowest_catch
             save_user_cats(message, cats)
 
             days = int(time//86400)
@@ -206,7 +290,7 @@ async def inventory(ctx, member: disnake.Member = None):
     if "fastest_catch" in inv:
         fastest = f"{inv['fastest_catch']}s"
     if "slowest_catch" in inv:
-        slowest = f"{round(inv['slowest_catch']/36)/100}h"
+        slowest = f"{inv['slowest_catch']}h"
     if member==ctx.author: description = f"Your fastest catch is {fastest} and\n"+\
                                          f"your slowest catch is {slowest}"
     else: description = f"Their fastest catch is {fastest} and\n"+\
@@ -229,28 +313,10 @@ async def inventory(ctx, member: disnake.Member = None):
 
 @bot.slash_command(name="lb", description="leaderboards")
 async def leaderboards(ctx):
-    folder_path = os.path.join(os.path.dirname(__file__), "cats")
-    if not os.path.exists(folder_path): os.makedirs(folder_path)
-    folder_path = os.path.join(folder_path, str(ctx.guild.id))
-    if not os.path.exists(folder_path): os.makedirs(folder_path)
-    lb = {}
-    for file in os.listdir(folder_path):
-        cats_counter = 0
-        inv = get_user_cats(ctx.guild.id, file.removesuffix(".dat"))
-        for type in cat_types:
-            if type in inv:
-                cats_counter += inv[type]
-        lb[int(file.removesuffix(".dat"))] = cats_counter
-    lb = sorted(lb.items(), key=lambda x:x[1], reverse=True)
-    if len(lb)>15: lb=lb[:15]
-    lb = dict(lb)
-    description = ""
-    counter = 1
-    for k, v in lb.items():
-        description += f"{counter}. {v} ctqas: <@{k}>\n"
-        counter += 1
-    try: await ctx.send(embed = disnake.Embed(title=f"{ctx.guild.name} ctqa leaderboards:", description = description))
-    except Exception as e: await ctx.send("uhhh sorry there is an error happened while sending your message and its mostly because your leaderboard is empty"+f"\n\n```{e}```")
+    try:
+        await ctx.send(embed=get_lb(ctx, "Cats"), components=lb_components("Cats"))
+    except Exception as e:
+        await ctx.send("uhhh sorry there is an error happened while sending your message and its mostly because your leaderboard is empty"+f"\n\n```{e}```")
 
 @bot.command()
 async def custom(ctx, user_id: int, cat_type: str, amount: int = 1):
@@ -283,6 +349,16 @@ async def whitelist(ctx, user_id: int):
 async def ping(ctx):
     await ctx.response.defer()
     h = round(bot.latency*1000)
-    await ctx.send(f"ctqa has bran delayt of {h}ms")
+    if h>=10000:  message = f"ctqa  iahbr an d<:syating_ctqa:1178288745435385896>lsy o{h} fmsae"
+    elif h>=8000: message = f"ci a<:syating_ctqa:1178288745435385896>has bratqmdelay o n{h}  sf"
+    elif h>=5000: message = f"cn a <:syating_ctqa:1178288745435385896>at br isadel yaofq{h}ms h"
+    elif h>=3000: message = f"htqa cysrb fan delai oa {h}ms <:syating_ctqa:1178288745435385896>"
+    elif h>=2000: message = f"cdqa{h}hastbrain  e  ylof  msa<:syating_ctqa:1178288745435385896>"
+    elif h>=1500: message = f"ct a<:syating_ctqa:1178288745435385896>ahsqbrain delay of {h} s m"
+    elif h>=1000: message = f"ctsbohas arain delay  f {h}mq <:syating_ctqa:1178288745435385896>"
+    elif h>=500:  message = f"ctqa<:syating_ctqa:1178288745435385896>has brain delay of {h}ms"
+    elif h>=300:  message = f"ctqa hasnbrai  delay of {h}ms <:syating_ctqa:1178288745435385896>"
+    else:         message = f"ctqa has bran delayt of {h}ms <:syating_ctqa:1178288745435385896>"
+    await ctx.send(message)
 
 bot.run(open("TOKEN.txt").read())
