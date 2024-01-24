@@ -1,5 +1,4 @@
 import disnake, asyncio, random, os, pickle
-from math import floor
 from disnake.ext import commands
 
 bot=commands.Bot(command_prefix="ctqa!", help_command=None, intents=disnake.Intents.all())
@@ -34,30 +33,14 @@ if not os.path.exists("ctqas.dat"):
 if not os.path.exists("ctqa channels.dat"):
     pickle.dump([], open("ctqa channels.dat", "wb"))
 
+custom_types = ["Silly", "Icosahedron", "Aflyde", "Octopus"]
 CAT_TYPES = []
+cat_types = []
+for k, v in type_dict.items():
+    CAT_TYPES += [k]*v
+    cat_types += [k]
 
-def makecatlist():
-    global CAT_TYPES
-    global cat_types
-    CAT_TYPES = []
-    cat_types = []
-    for k, v in type_dict.items():
-        CAT_TYPES += [k]*v
-        cat_types += [k]
-
-makecatlist()
-
-def get_cat():
-    global CAT_TYPES
-    if len(CAT_TYPES) == 0: makecatlist()
-    return CAT_TYPES.pop(random.randrange(len(CAT_TYPES)))
-
-def get_user_cats(*args):
-    if len(args)==2: server_id, member_id = args
-    else:
-        arg = args[0]
-        server_id = arg.guild.id
-        member_id = arg.author.id
+def get_user_cats(server_id, member_id):
     filepath = os.path.join(os.path.dirname(__file__), "cats")
     if not os.path.exists(filepath): os.makedirs(filepath)
     filepath = os.path.join(filepath, str(server_id))
@@ -67,11 +50,7 @@ def get_user_cats(*args):
         return pickle.load(open(filepath, "rb"))
     return {}
 
-def save_user_cats(*args):
-    if len(args)==3: server_id, member_id, cats = args
-    else:
-        server_id, member_id = args[0].guild.id, args[0].author.id
-        cats = args[1]
+def save_user_cats(server_id, member_id, cats):
     filepath = os.path.join(os.path.dirname(__file__), "cats", str(server_id), f"{member_id}.dat")
     pickle.dump(cats, open(filepath, "wb"))
 
@@ -90,14 +69,11 @@ def give_custom_cat(member_id, cat_type, amount):
     filepath = os.path.join(os.path.dirname(__file__), "custom cats", f"{member_id}.dat")
     pickle.dump(cats, open(filepath, "wb"))
 
-def givecat(*args):
-    interaction = args[0]
-    cat_type = args[1]
-    amount = args[2]
-    cats = get_user_cats(interaction)
+def givecat(server_id, member_id, cat_type, amount):
+    cats = get_user_cats(server_id, member_id)
     if cat_type in cats: cats[cat_type] += amount
     else: cats[cat_type] = amount
-    save_user_cats(interaction, cats)
+    save_user_cats(server_id, member_id, cats)
 
 def emoji(name):
     return str(disnake.utils.get(bot.get_guild(1178285875608698951).emojis, name=name))
@@ -107,6 +83,21 @@ def ctqa_emoji(name):
     if name == "octopus": catemoji = "🐙"
     else: catemoji = disnake.utils.get(bot.get_guild(1178285875608698951).emojis, name=f"{name}ctqa") or "emoji fail"
     return catemoji
+
+async def spawn_cat(channel):
+    cat_list = pickle.load(open("ctqas.dat", "rb"))
+    if not channel.id in cat_list:
+        cat = random.choice(CAT_TYPES)
+        cat_emoji = ctqa_emoji(cat)
+        msg = await channel.send(f"A wild {cat_emoji} **{cat} Ctqa** just appeared! Type \"ctqa\" to catch it!", file = disnake.File("syating_ctqa.webp"))
+        cat_list[channel.id] = [cat, msg.id]
+        print(type(cat_list))
+        print(cat_list)
+        pickle.dump(cat_list, open("ctqas.dat", "wb"))
+    else:
+        return False
+    return True
+    # it will return did cat spawn in channel or not
 
 def get_lb(ctx, lb_type):
     folder_path = os.path.join(os.path.dirname(__file__), "cats")
@@ -135,10 +126,9 @@ def get_lb(ctx, lb_type):
         for file in os.listdir(folder_path):
             inv = get_user_cats(ctx.guild.id, file.removesuffix(".dat"))
             if "fastest_catch" in inv:
-                lb[int(file.removesuffix(".dat"))] = str(inv["fastest_catch"])
-            else:
-                lb[int(file.removesuffix(".dat"))] = "Unknown"
-        lb = sorted(lb.items(), key=lambda x:x[1])
+                lb[int(file.removesuffix(".dat"))] = inv["fastest_catch"]
+        lb = lb.items()
+        lb = sorted(lb, key=lambda x:x[1])
         if len(lb)>15: lb=lb[:15]
         lb = dict(lb)
         description = ""
@@ -151,7 +141,7 @@ def get_lb(ctx, lb_type):
         for file in os.listdir(folder_path):
             inv = get_user_cats(ctx.guild.id, file.removesuffix(".dat"))
             if "slowest_catch" in inv:
-                lb[int(file.removesuffix(".dat"))] = str(inv["slowest_catch"])
+                lb[int(file.removesuffix(".dat"))] = inv["slowest_catch"]
         lb = sorted(lb.items(), key=lambda x:x[1], reverse=True)
         if len(lb)>15: lb=lb[:15]
         lb = dict(lb)
@@ -198,15 +188,7 @@ async def on_ready():
             if server:
                 channel = await server.fetch_channel(channel_id)
                 if channel:
-                    cat_list = pickle.load(open("ctqas.dat", "rb"))
-                    if not channel_id in cat_list:
-                        cat = get_cat()
-                        cat_emoji = ctqa_emoji(cat)
-                        msg = await channel.send(f"A wild {cat_emoji} **{cat} Ctqa** just appeared! Type \"ctqa\" to catch it!", file = disnake.File("syating_ctqa.webp"))
-                        cat_list[channel_id] = [cat, msg.id]
-                        print(type(cat_list))
-                        print(cat_list)
-                        pickle.dump(cat_list, open("ctqas.dat", "wb"))
+                    await spawn_cat(channel)
         await asyncio.sleep(random.randint(30, 60*5))
 
 @bot.event
@@ -232,16 +214,16 @@ async def on_message(message):
             then = ctqamessage.created_at.timestamp()
             time = round(abs(current_time-then)*100)/100
 
-            cats = get_user_cats(message)
+            cats = get_user_cats(message.guild.id, message.author.id)
             if "fastest_catch" in cats:
-                if cats["fastest_catch"]<time: cats["fastest_catch"] = time
+                if cats["fastest_catch"]>time: cats["fastest_catch"] = time
             else: cats["fastest_catch"] = time
 
             slowest_catch = round(time/3600*100)/100
             if "slowest_catch" in cats:
                 if cats["slowest_catch"]<slowest_catch: cats["slowest_catch"] = slowest_catch
             else: cats["slowest_catch"] = slowest_catch
-            save_user_cats(message, cats)
+            save_user_cats(message.guild.id, message.author.id, cats)
 
             days = int(time//86400)
             hours= int(time//3600%24)
@@ -256,24 +238,27 @@ async def on_message(message):
                 caught_time += f"{acc_seconds} seconds"
             caught_time = caught_time.strip()
             try: await ctqamessage.delete()
-            except: pass
+            except: await message.channel.send("cant remove messages")
             try: await message.delete()
-            except: pass
+            except: await message.reply("cant remove messages")
             cat_type = catlist[0]
-            givecat(message, cat_type, 1)
-            await message.channel.send(f"{message.author.mention} caught a {ctqa_emoji(cat_type)} **{cat_type} Ctqa** in **{caught_time}**!\n"+\
+            givecat(message.guild.id, message.author.id, cat_type, 1)
+            await message.channel.send(f"{message.author.mention} caught a {ctqa_emoji(cat_type)} **{cat_type} Ctqa** in **{caught_time}**!\n"
                                        f"They now have **{get_user_cats(message.guild.id, message.author.id)[cat_type]} {cat_type} Ctqas** in their inventory.")
         else:
             await message.add_reaction(bot.get_emoji(1178287922756194394))
 
-@bot.slash_command(name="setup", description="make bot spawn cats here (OWNER ONLY)")
-async def send_splash_here(ctx):
+@bot.slash_command(name="setup", description="make bot spawn ctqas here (OWNER ONLY)")
+async def setup(ctx):
     channels = pickle.load(open("ctqa channels.dat", "rb"))
 
     if ctx.author.id in [ctx.guild.owner_id, 558979299177136164]:
         if [ctx.guild.id, ctx.channel.id] in channels:
-            channels.pop(ctx.guild.id)
+            channels.pop(channels.index([ctx.guild.id, ctx.channel.id]))
             await ctx.send(f"**#{ctx.channel}** was removed from ctqa spawn list ❌")
+        elif any(ctx.guild.id==k for k, v in channels):
+            await ctx.send("dev mode and currency coming somewhen idk")
+            return
         else:
             channels += [[ctx.guild.id, ctx.channel.id]]
             await ctx.send(f"**#{ctx.channel}** was added to ctqa spawn list ✅")
@@ -305,29 +290,53 @@ async def inventory(ctx, member: disnake.Member = None):
             if type in inv:
                 embed.add_field(name=f"{ctqa_emoji(type)} {type}", value=inv[type])
                 cats_counter += inv[type]
-        for type in customs:
-            embed.add_field(name=f"{ctqa_emoji(type)} {type}", value=customs[type])
+        for type in custom_types:
+            if type in customs:
+                embed.add_field(name=f"{ctqa_emoji(type)} {type}", value=customs[type])
     footer_dict={"text": f"Total ctqas: {cats_counter}"}
     embed.set_footer(**footer_dict)
     await ctx.send(embed=embed)
 
 @bot.slash_command(name="lb", description="leaderboards")
 async def leaderboards(ctx):
-    try:
-        await ctx.send(embed=get_lb(ctx, "Cats"), components=lb_components("Cats"))
-    except Exception as e:
-        await ctx.send("uhhh sorry there is an error happened while sending your message and its mostly because your leaderboard is empty"+f"\n\n```{e}```")
+    await ctx.send(embed=get_lb(ctx, "Cats"), components=lb_components("Cats"))
+
+@bot.slash_command(name="force_spawn", description="Forces ctqa to spawn in channel")
+async def force_spawn(ctx, ctqa_type):
+    if not ctqa_type in cat_types:
+        await ctx.send("this ctqa type doesn't exist")
+    if True:
+        await ctx.send("dev mode and currency coming somewhen idk")
+    else:
+        await spawn_cat(ctx.channel)
 
 @bot.command()
 async def custom(ctx, user_id: int, cat_type: str, amount: int = 1):
     if not ctx.author.id in [558979299177136164, 903650492754845728]:
         await ctx.send(emoji("typing"))
         return
-    if cat_type in cat_types:
+    if cat_type in custom_types:
         await ctx.send(f"{cat_type} is not a custom cat type")
         return
     give_custom_cat(user_id, cat_type, amount)
     await ctx.send(f"gave {bot.get_user(user_id)} {amount} {cat_type} ctqas")
+
+@bot.slash_command(name="gift", description="give ctqas to someone")
+async def gift(ctx, member: disnake.Member, ctqa_type: str, amount: int = 1):
+    user_cats = get_user_cats(ctx.guild.id, ctx.author.id)
+    if not ctqa_type in cat_types:
+        await ctx.send(f"ctqa type `{ctqa_type}` doesn't exist", ephemeral=True)
+        return
+    if not ctqa_type in user_cats:
+        await ctx.send(f"you dont have ctqas of `{ctqa_type}` type", ephemeral=True)
+        return
+    user_cat = user_cats[ctqa_type]
+    if amount>user_cat:
+        await ctx.send(f"you dont have that many `{ctqa_type}` ctqas (you have {user_cat} and wanted to donate {amount})", ephemeral=True)
+        return
+    givecat(ctx.guild.id, ctx.author.id, ctqa_type, -amount)
+    givecat(ctx.guild.id, member.id, ctqa_type, amount)
+    await ctx.send(f"{ctx.author.mention} gave {member.mention} {amount} {ctqa_type} ctqas!!!!!!!")
 
 @bot.command()
 async def whitelist(ctx, user_id: int):
