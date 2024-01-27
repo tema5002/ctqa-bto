@@ -217,7 +217,7 @@ def get_achs(ctx, category):
     return embed
 
 async def achembed(ctx, user_id, ach_id):
-    if type(ctx) == disnake.Message and type(ctx.channel) == disnake.DMChannel:
+    if ctx.channel.type == disnake.ChannelType.private:
         await ctx.channel.send("hell naw you cant get achs in dms")
         return False
     inv = get_user_cats(ctx.guild.id, user_id)
@@ -231,8 +231,8 @@ async def achembed(ctx, user_id, ach_id):
     save_user_cats(ctx.guild.id, user_id, inv)
 
     info = get_ach_info(ach_id)
-    embed = disnake.Embed(title="New achievement!")
-    value = f"insert cat trophy emoji here{info[1]}"
+    embed = disnake.Embed(title="<:ctqa_trophy:1200918336444309524> New achievement!")
+    value = info[1]
     if ach_id=="dataminer":
         value = "bushes hid the description 😔😔😂😂🐔👈🧑‍💻"
     if ach_id=="pleasedothectqa":
@@ -293,7 +293,7 @@ async def on_message(message):
     msg = message.content
     msgl = msg.lower()
 
-    if type(message.channel) == disnake.DMChannel:
+    if type(message.channel) == disnake.DMChannel and message.author!=bot.user:
         await message.channel.send("good job! use ctqa!lol_i_have_dmed_ctqa_and_got_an_ach")
         return
 
