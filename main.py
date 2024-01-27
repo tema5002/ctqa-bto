@@ -251,6 +251,8 @@ async def achembed(ctx, user_id, ach_id):
     if ach_id=="pleasedothectqa":
         value = "you got one fine ctqa!!!!!!!"
     embed.add_field(name = info[0], value = value)
+    footer_dict={"text": f"Unlocked by @{temalib.get_username(ctx.author)}"}
+    embed.set_footer(**footer_dict)
     await ctx.channel.send(embed = embed)
     return True
 
@@ -326,12 +328,12 @@ async def on_message(message):
 
             if "fastest" not in cats["catches"] or cats["catches"]["fastest"]>time:
                 cats["catches"]["fastest"] = time
-            if time<5: await achembed(message, message.author.id, "fast-catcher")
+            if time<5: await achembed(message, message.author.id, "fastcatcher")
 
             slowest_catch = round(time/36)/100
             if "slowest" not in cats["catches"] or cats["catches"]["slowest"]<slowest_catch:
                 cats["catches"]["slowest"] = slowest_catch
-            if slowest_catch>1: await achembed(message, message.author.id, "slow-catcher")
+            if slowest_catch>1: await achembed(message, message.author.id, "slowcatcher")
 
             save_user_cats(message.guild.id, message.author.id, cats)
 
@@ -476,7 +478,7 @@ async def gift(ctx, member: disnake.Member, ctqa_type: str, amount: int = 1):
     givecat(ctx.guild.id, ctx.author.id, ctqa_type, -amount)
     await achembed(ctx, ctx.author.id, "donator")
     givecat(ctx.guild.id, member.id, ctqa_type, amount)
-    await achembed(ctx, member.id, "anti-donator")
+    await achembed(ctx, member.id, "antidonator")
     await ctx.send(f"{ctx.author.mention} gave {member.mention} {amount} {ctqa_type} ctqas!!!!!!!")
 
 

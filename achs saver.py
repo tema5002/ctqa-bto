@@ -6,9 +6,9 @@ achs = {
     "Ctqa Hunt": {
         "first": ["First ctqa!", "The journey begins..."],
         "donator": ["Donator", "gift your ctqas to someone idk"],
-        "anti-donator": ["Anti-donator", "get donated to"],
-        "fast-catcher": ["Fast Catcher", "Catch a ctqa in under 5 seconds"],
-        "slow-catcher": ["Slow Catcher", "Catch a ctqa in over a hour"],
+        "antidonator": ["Anti-donator", "get donated to"],
+        "fastcatcher": ["Fast Catcher", "Catch a ctqa in under 5 seconds"],
+        "slowcatcher": ["Slow Catcher", "Catch a ctqa in over a hour"],
         "collecter": ["Collecter", "Get all ctqa types"]
     },
     "Random": {
