@@ -145,7 +145,7 @@ def get_lb(ctx, lb_type):
     elif lb_type == "Slowest":
         for file in os.listdir(folder_path):
             inv = get_user_cats(ctx.guild.id, file.removesuffix(".json"))
-            if "slowest" in inv:
+            if "catches" in inv:
                 catches_ = inv["catches"]
                 if "slowest" in catches_:
                     lb[int(file.removesuffix(".json"))] = catches_["slowest"]
@@ -158,6 +158,19 @@ def get_lb(ctx, lb_type):
             description += f"{counter}. {v}h: <@{k}>\n"
             counter += 1
         return disnake.Embed(title=f"{ctx.guild.name} slowest catches leaderboards:", description=description)
+
+def lb_components(h):
+    components = [
+        disnake.ui.Button(label="Ctqas", style=disnake.ButtonStyle.primary, custom_id="UPDATELB;Ctqas"),
+        disnake.ui.Button(label="Fastest", style=disnake.ButtonStyle.primary, custom_id="UPDATELB;Fastest"),
+        disnake.ui.Button(label="Slowest", style=disnake.ButtonStyle.primary, custom_id="UPDATELB;Slowest")
+    ]
+
+    refresh_index = {"Ctqas": 0, "Fastest": 1, "Slowest": 2}[h]
+
+    components[refresh_index] = disnake.ui.Button(label="Refresh", style=disnake.ButtonStyle.success, custom_id=f"UPDATELB;{h}")
+
+    return components
 
 def get_ach_info(ach_id):
     for category, sub_dict in __ACHS__.items():
@@ -241,19 +254,6 @@ async def achembed(ctx, user_id, ach_id):
     await ctx.channel.send(embed = embed)
     return True
 
-def lb_components(h):
-    components = [
-        disnake.ui.Button(label="Ctqas", style=disnake.ButtonStyle.primary, custom_id="UPDATELB;Ctqas"),
-        disnake.ui.Button(label="Fastest", style=disnake.ButtonStyle.primary, custom_id="UPDATELB;Fastest"),
-        disnake.ui.Button(label="Slowest", style=disnake.ButtonStyle.primary, custom_id="UPDATELB;Slowest")
-    ]
-
-    refresh_index = {"Ctqas": 0, "Fastest": 1, "Slowest": 2}[h]
-
-    components[refresh_index] = disnake.ui.Button(label="Refresh", style=disnake.ButtonStyle.success, custom_id=f"UPDATELB;{h}")
-
-    return components
-
 @bot.listen("on_button_click")
 async def help_listener(ctx):
     h = ctx.component.custom_id
@@ -322,13 +322,15 @@ async def on_message(message):
             time = round(abs(current_time-then)*100)/100
 
             cats = get_user_cats(message.guild.id, message.author.id)
-            if "fastest_catch" not in cats or cats["fastest_catch"]>time:
-                cats["fastest_catch"] = time
+            if "catches" not in cats: cats["catches"] = []
+
+            if "fastest" not in cats["catches"] or cats["catches"]["fastest"]>time:
+                cats["catches"]["fastest"] = time
             if time<5: await achembed(message, message.author.id, "fast-catcher")
 
             slowest_catch = round(time/36)/100
-            if "slowest_catch" not in cats or cats["slowest_catch"]<slowest_catch:
-                cats["slowest_catch"] = slowest_catch
+            if "slowest" not in cats["catches"] or cats["catches"]["slowest"]<slowest_catch:
+                cats["catches"]["slowest"] = slowest_catch
             if slowest_catch>1: await achembed(message, message.author.id, "slow-catcher")
 
             save_user_cats(message.guild.id, message.author.id, cats)
@@ -441,7 +443,7 @@ async def inventory(ctx, member: disnake.Member = None):
 
 @bot.slash_command(name="lb", description="leaderboards")
 async def leaderboards(ctx):
-    await ctx.send(embed=get_lb(ctx, "Cats"), components=lb_components("Ctqas"))
+    await ctx.send(embed=get_lb(ctx, "Ctqas"), components=lb_components("Ctqas"))
 
 @bot.slash_command(name="achs", description="view your achievements")
 async def achs(ctx):
