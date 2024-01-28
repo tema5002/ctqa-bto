@@ -26,6 +26,8 @@ achs = {
     "Hidden": {
         "dataminer": ["It's a mystery to nobody.", f"say `{datamine}`"],
         "сейф": ["Сейф 🔐🛡️👼😂", "Ф цшдв сейф огые фззуфкув!!!"]
+    },
+    "Unfair": {
     }
 }
-json.dump(achs, open("achs.json", "w"), sort_keys=True, indent=4) 
+json.dump(achs, open("achs.json", "w"), sort_keys=True, indent=4)
