@@ -48,8 +48,7 @@ def get_user_cats(server_id, member_id):
     return json.load(open(filepath))
 
 def save_user_cats(server_id, member_id, cats):
-    filepath = temalib.get_folder_path(__file__, "cats", str(server_id))
-    filepath = os.path.join(filepath, f"{member_id}.json")
+    filepath = temalib.get_file_path(__file__, "cats", str(server_id), f"{member_id}.json")
     json.dump(cats, open(filepath, "w"), sort_keys=True, indent=4)
 
 def get_custom_cats(member_id):
@@ -203,7 +202,7 @@ def get_achs_amount(ctx):
         if category != "Hidden":
             count += len(sub_dict)
         else:
-            for k in category: hiddens += [k]
+            for k in sub_dict: hiddens += [k]
 
     a = [len([x for x in user_achs if x not in hiddens]), count, len([x for x in user_achs if x in hiddens])]
     b = f"{a[0]}/{a[1]}"
@@ -328,12 +327,14 @@ async def on_message(message):
 
             if "fastest" not in cats["catches"] or cats["catches"]["fastest"]>time:
                 cats["catches"]["fastest"] = time
-            if time<5: await achembed(message, message.author.id, "fastcatcher")
+            if time<5:
+                await achembed(message, message.author.id, "fastcatcher")
 
             slowest_catch = round(time/36)/100
             if "slowest" not in cats["catches"] or cats["catches"]["slowest"]<slowest_catch:
                 cats["catches"]["slowest"] = slowest_catch
-            if slowest_catch>1: await achembed(message, message.author.id, "slowcatcher")
+            if slowest_catch>1:
+                await achembed(message, message.author.id, "slowcatcher")
 
             save_user_cats(message.guild.id, message.author.id, cats)
 
@@ -361,7 +362,7 @@ async def on_message(message):
             givecat(message.guild.id, message.author.id, cat_type, 1)
             await message.channel.send(f"{message.author.mention} caught a {ctqa_emoji(cat_type)} **{cat_type} Ctqa** in **{caught_time}**!\n"
                                        f"They now have **{get_user_cats(message.guild.id, message.author.id)['cats'][cat_type]} {cat_type} Ctqas** in their inventory.")
-        else:
+        elif msgl!="cat":
             try:
                 await message.add_reaction(bot.get_emoji(1178287922756194394))
             except NotFound:
@@ -465,6 +466,9 @@ async def force_spawn(ctx, ctqa_type):
 @bot.slash_command(name="gift", description="give ctqas to someone")
 async def gift(ctx, member: disnake.Member, ctqa_type: str, amount: int = 1):
     cats = get_user_cats(ctx.guild.id, ctx.author.id)["cats"]
+    if member == ctx.author:
+        await ctx.send("uhhhhh", ephemeral=True)
+        return
     if not ctqa_type in cat_types:
         await ctx.send(f"ctqa type `{ctqa_type}` doesn't exist", ephemeral=True)
         return
@@ -474,6 +478,9 @@ async def gift(ctx, member: disnake.Member, ctqa_type: str, amount: int = 1):
     user_cat = cats[ctqa_type]
     if amount>user_cat:
         await ctx.send(f"you dont have that many `{ctqa_type}` ctqas (you have {user_cat} and wanted to donate {amount})", ephemeral=True)
+        return
+    if amount<1:
+        await ctx.send("nooouuuuu 😛😛😛😛", ephemeral=True)
         return
     givecat(ctx.guild.id, ctx.author.id, ctqa_type, -amount)
     await achembed(ctx, ctx.author.id, "donator")
