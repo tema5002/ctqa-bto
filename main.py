@@ -1,8 +1,10 @@
 import asyncio
 import math
 import os
+import re
 import pickle
 import random
+import time
 from typing import Type, Any
 
 import antigrav as json
@@ -16,9 +18,16 @@ from achs import achs
 blurple = disnake.ButtonStyle.blurple
 green = disnake.ButtonStyle.success
 gray = disnake.ButtonStyle.primary
+red = disnake.ButtonStyle.danger
 
 bot = commands.Bot(command_prefix="ctqa!", help_command=None, intents=disnake.Intents.all())
 cats_file: Type = dict[str, list[str] | dict[str, float] | dict[str, int] | dict[str | complex]]
+
+trusted_people = [
+    558979299177136164,
+    1204799892988629054,
+    1127903408179904662
+]
 
 type_dict = {
     "Fine": 1000,
@@ -52,7 +61,7 @@ if not os.path.exists("ctqa channels.dat"):
     pickle.dump([], open("ctqa channels.dat", "wb"))
 
 custom_types = ["Silly", "Icosahedron", "Aflyde", "Octopus", "typing", "Kesslon", "Bread", "Blep", "cake64",
-                "antaegeav"]
+                "antaegeav", "Jeremy", "Maxwell"]
 cat_types = []
 CAT_TYPES = []
 for k, v in type_dict.items():
@@ -61,22 +70,29 @@ for k, v in type_dict.items():
 
 
 # ------ quadrillion functions here ------
+def nan():
+    return random.choice(["🍏", "🦐"])
+
 def repr_complex(number: int | complex) -> str:
     real = str(number.real)
-    imag = str(number.imag) if number.imag else ""
+    imag = str(abs(number.imag)) if number.imag else ""
     if real == "inf":
         real = "∞"
     if imag == "inf":
         imag = "∞"
     if real == "nan":
-        real = "🍏"
+        real = nan()
     if imag == "nan":
-        imag = "🍏"
-    return real + (("+" + imag + "i") if imag else "")
+        imag = nan()
+    if number.imag < 0:
+        return f"{real}-{imag}i"
+    if number.imag:
+        return f"{real}+{imag}i"
+    return real
 
 
 def skill_issued(member: disnake.Member) -> bool:
-    return not (member.guild_permissions.administrator or member.id in trustedpeople)
+    return not (member.guild_permissions.administrator or member.id in trusted_people)
 
 
 def get_lb(ctx, lb_type: str) -> disnake.Embed:
@@ -98,34 +114,28 @@ def get_lb(ctx, lb_type: str) -> disnake.Embed:
     elif lb_type == "Fastest":
         for file in os.listdir(folder_path):
             inv = get_user_cats(ctx.guild.id, file.removesuffix(".antigrav"))
-            if "catches" in inv:
-                catches_ = inv["catches"]
-                if "fastest" in catches_:
-                    lb[int(file.removesuffix(".antigrav"))] = catches_["fastest"]
+            if time := inv.get("catches", {}).get("fastest"):
+                lb[int(file.removesuffix(".antigrav"))] = time
         lb = sorted(lb.items(), key=lambda x: x[1])
         if len(lb) > 15:
             lb = lb[:15]
-        lb = dict(lb)
         description = ""
         counter = 1
-        for k, v in lb.items():
+        for k, v in lb:
             description += f"{counter}. {v}s: <@{k}>\n"
             counter += 1
         return disnake.Embed(title=f"{ctx.guild.name} fastest catches leaderboards:", description=description)
     elif lb_type == "Slowest":
         for file in os.listdir(folder_path):
             inv = get_user_cats(ctx.guild.id, file.removesuffix(".antigrav"))
-            if "catches" in inv:
-                catches_ = inv["catches"]
-                if "slowest" in catches_:
-                    lb[int(file.removesuffix(".antigrav"))] = catches_["slowest"]
+            if time := inv.get("catches", {}).get("slowest"):
+                lb[int(file.removesuffix(".antigrav"))] = time
         lb = sorted(lb.items(), key=lambda x: x[1], reverse=True)
         if len(lb) > 15:
             lb = lb[:15]
-        lb = dict(lb)
         description = ""
         counter = 1
-        for k, v in lb.items():
+        for k, v in lb:
             description += f"{counter}. {v}h: <@{k}>\n"
             counter += 1
         return disnake.Embed(title=f"{ctx.guild.name} slowest catches leaderboards:", description=description)
@@ -147,26 +157,28 @@ def lb_components(h):
 
 
 def get_achs_amount(ctx):
-    user_achs = get_user_cats(ctx.guild.id, ctx.author.id).get("achs", [])
+    user_achs = set(get_user_cats(ctx.guild.id, ctx.author.id).get("achs", []))
 
-    hiddens = []
-    count = 0
+    total_achs = 0
+    hiddens = set()
     for category, sub_dict in achs.items():
         if category != "Hidden":
-            count += len(sub_dict)
+            total_achs += len(sub_dict)
         else:
-            for k in sub_dict:
-                hiddens.append(k)
+            hiddens = set(sub_dict)
 
-    a = [len([x for x in user_achs if x not in hiddens]), count, len([x for x in user_achs if x in hiddens])]
-    b = f"{a[0]}/{a[1]}"
-    if a[2] != 0:
-        b += f" + {a[2]}"
-    return b
+    a = [
+        len(user_achs - hiddens),
+        len(hiddens & user_achs)
+    ]
+    return f"{a[0]}/{total_achs}" + (f" + {a[1]}" if hiddens else "")
 
 
 def get_achs(ctx, category):
-    embed = disnake.Embed(title=f"Your achievements", description=f"Achievements unlocked: {get_achs_amount(ctx)}")
+    description = f"Achievements unlocked: {get_achs_amount(ctx)}"
+    if category == "Hidden":
+        description += "\n\nAchievements here appear here only when you get them."
+    embed = disnake.Embed(title=f"Your achievements", description=description)
     user_achs = get_user_cats(ctx.guild.id, ctx.author.id).get("achs", [])
 
     t1 = "<:ctqa_trophy:1200918336444309524>"
@@ -183,12 +195,20 @@ def get_achs(ctx, category):
     return embed
 
 
-async def achembed(ctx, user: disnake.User | disnake.Member, ach_id: str) -> bool:
+async def achembed(ctx, user: disnake.User | disnake.Member, ach_id: str) -> bool | None:
     if ctx.channel.type == disnake.ChannelType.private:
         await ctx.channel.send("hell naw you cant get achs in dms")
         return False
     inv = get_user_cats(ctx.guild.id, user.id)
     inv["achs"] = inv.get("achs", [])
+
+    info = get_ach_info(ach_id)
+    if not info:
+        embed = disnake.Embed(title="this is an achievement test")
+        embed.add_field(name="курсор в слинкс атик", value="<@1056952213056004118> ты укен гар")
+        embed.set_footer(text=f"Unlocked by @{user}")
+        await ctx.channel.send(embed=embed)
+        return
 
     if ach_id in inv["achs"]:
         return False
@@ -196,7 +216,6 @@ async def achembed(ctx, user: disnake.User | disnake.Member, ach_id: str) -> boo
     inv["achs"].append(ach_id)
     save_user_cats(ctx.guild.id, user.id, inv)
 
-    info = get_ach_info(ach_id)
     embed = disnake.Embed(title="<:ctqa_trophy:1200918336444309524> New achievement!")
     value = info[1]
     if ach_id == "dataminer":
@@ -204,8 +223,7 @@ async def achembed(ctx, user: disnake.User | disnake.Member, ach_id: str) -> boo
     if ach_id == "pleasedothectqa":
         value = "you got one fine ctqa!!!!!!!"
     embed.add_field(name=info[0], value=value)
-    footer_dict = {"text": f"Unlocked by @{user}"}
-    embed.set_footer(**footer_dict)
+    embed.set_footer(text=f"Unlocked by @{user}")
     await ctx.channel.send(embed=embed)
     return True
 
@@ -236,37 +254,48 @@ def get_config(message: disnake.Message):
         temalib.get_file_path(__file__, "servers config", f"{message.guild.id}.antigrav", create_file="{}"))
     )
 
+def get_inv_fp(server_id: int | str, member_id: int | str) -> str:
+    return temalib.get_file_path(
+        __file__, "cats", str(server_id), f"{member_id}.antigrav",
+        create_file="{}"
+    )
 
 def get_user_cats(server_id: int | str, member_id: int | str) -> cats_file:
+    return json.load(open(get_inv_fp(server_id, member_id)))
+
+
+def save_user_cats(server_id: int | str, member_id: int | str, cats: cats_file) -> None:
+    json.dump(cats, open(get_inv_fp(server_id, member_id), "w"), sort_keys=True, indent=4)
+
+
+def get_user_config(member_id: int | str) -> dict:
     return json.load(open(temalib.get_file_path(
-        __file__, "cats", str(server_id), f"{member_id}.antigrav",
+        __file__, "user config", f"{member_id}.antigrav",
         create_file="{}"
     )))
 
 
-def save_user_cats(server_id: int | str, member_id: int | str, cats: cats_file) -> None:
-    json.dump(cats, open(
+def save_user_config(config: dict, member_id: int | str) -> None:
+    json.dump(config, open(
         temalib.get_file_path(
-            __file__, "cats", str(server_id), f"{member_id}.antigrav"),
+            __file__, "user config", f"{member_id}.antigrav"),
         "w"), sort_keys=True, indent=4)
 
 
-def get_custom_cat(member_id: int):
-    return temalib.openfile(temalib.get_file_path(__file__, "custom cats", f"{member_id}.txt")).read()
+def get_custom_cat(member_id: int | str) -> str:
+    return get_user_config(member_id).get("custom", "")
 
 
-def set_custom_cat(member_id: int, cat_type: str) -> None:
-    temalib.editfile(temalib.get_file_path(__file__, "custom cats", f"{member_id}.txt")).write(cat_type)
+def set_custom_cat(member_id: int | str, ctqa_type: str) -> None:
+    config = get_user_config(member_id)
+    config["custom"] = ctqa_type
+    save_user_config(config, member_id)
 
 
 def give_cat(server_id: int, member_id: int, cat_type: str, amount: int) -> int | complex:
     cats = get_user_cats(server_id, member_id)
-    if not cats.get("cats"):
-        cats["cats"] = {}
-    if cat_type in cats["cats"]:
-        cats["cats"][cat_type] += amount
-    else:
-        cats["cats"][cat_type] = amount
+    cats["cats"] = cats.get("cats", {})
+    cats["cats"][cat_type] = cats["cats"].get(cat_type, 0) + amount
     save_user_cats(server_id, member_id, cats)
     return cats["cats"][cat_type]
 
@@ -304,8 +333,17 @@ emojis_list = []
 
 
 async def start_message(channel: disnake.abc.Messageable) -> disnake.Message:
+    print(f"sending start message")
     emodeez = ''.join(str(random.choice(emojis_list)) for _ in range(random.randint(25, 50)))
     return await channel.send(f"<@&1231915005730095186> i have started {emodeez}")
+
+
+async def update_start_message(message: disnake.Message) -> None:
+    print(f"running update_start_message()")
+    emodeez = ''.join(str(random.choice(emojis_list)) for _ in range(random.randint(25, 50)))
+    while True:
+        await message.edit(f"<@&1231915005730095186> i have started {emodeez}\n\ni am online on <t:{math.floor(time.time())}:T>")
+        await asyncio.sleep(10)
 
 
 async def spawn_cat(channel: disnake.abc.Messageable) -> bool:
@@ -316,13 +354,17 @@ async def spawn_cat(channel: disnake.abc.Messageable) -> bool:
         "кукумбер 🦂",
         "Скарпион 🥒",
         "чо за фигню ты нисёш 🙄💅 пажалуста удали ето 😨 у миня радители в комноте 👨‍👩‍👧 аааааааааа 🥸 please delete this now 🥺 окей 👍 тебе ПАНЯТНА ИЛИ НЕТ 🤨 УДОЛЯЙ ЭТО СЕЙЧАЗ 💀 ААААААААА 😊",
-        "sake 🍶🤧"
+        "sake 🍶🤧",
+        "hey ammeter who is icosahydrant",
+        "cat 🐈😺😺😁😁 ctqa 🐬🐋🦈🐬🦈😭😔😕😔"
     ]
     cat_list = pickle.load(open("ctqas.dat", "rb"))
     if channel.id not in cat_list:
         cat = random.choice(CAT_TYPES)
         cat_emoji = ctqa_emoji(cat)
-        brumbler = random.choice(bruvver) if random.randint(0, 9) == 0 else "ctqa"
+        brumbler = "ctqa"
+        if random.randrange(0, 50) == 0:
+            brumbler = random.choice(bruvver)
         if channel.id == 1230933738561474580:
             msg = f"hey <@1030817797921583236> do you want to catch a {brumbler} ⛈️⛈️⛈️⛈️⛈️⛈️⛈️"
         else:
@@ -330,10 +372,31 @@ async def spawn_cat(channel: disnake.abc.Messageable) -> bool:
         msg = await channel.send(msg, file=get_ctqa_image(cat))
         cat_list[channel.id] = {"type": cat, "id": msg.id, "say_to_catch": brumbler}
         pickle.dump(cat_list, open("ctqas.dat", "wb"))
-    else:
-        return False
-    return True
+        return True
+    return False
     # it will return did cat spawn in channel or not
+
+
+async def spawn_ctqa_loop():
+    print(f"running spawn_ctqa_loop()")
+    while True:
+        ctqa_channels: list[tuple[int, int]] = pickle.load(open("ctqa channels.dat", "rb"))
+        for ids in ctqa_channels:
+            try:
+                await spawn_cat(await get_channel(*ids))
+            except AttributeError:
+                ctqa_channels.remove(ids)
+        pickle.dump(ctqa_channels, open("ctqa channels.dat", "wb"))
+
+        await bot.change_presence(status=disnake.Status.online, activity=random.choice([
+            disnake.Activity(type=disnake.ActivityType.watching, name="Cat Bot sanity"),
+            disnake.Activity(type=disnake.ActivityType.watching, name="blame babybear"),
+            disnake.Activity(type=disnake.ActivityType.watching, name=f"{len(bot.guilds)} servers"),
+            disnake.Activity(type=disnake.ActivityType.watching, name=f"{sum(guild.member_count for guild in bot.guilds)} idiots"),
+            disnake.Activity(type=disnake.ActivityType.custom, name="gaming"),
+            disnake.Activity(type=disnake.ActivityType.listening, name="proglet bambawagel")
+        ]))
+        await asyncio.sleep(random.randint(60, 60 * 10))
 
 
 def get_ctqa_image(ctqa_type: str) -> disnake.File:
@@ -363,18 +426,35 @@ async def help_listener(ctx):
                 components=achs_components("Ctqa Hunt"),
                 ephemeral=True)
         else:
+            # noinspection LongLine
             await ctx.send(
-                f"{ctx.author.mention} чел ну ты и чел типо ну чел ну ты и чел капец чел чел чел саратов и смерть чел"
-                f"ну ты вообще ну че чел ты ткаой чел блин чел ну чел ну ты чел вообще чел чел 🍰🍰🍰",
-                delete_after=60)
+                "nouuuuu 😛😛😛😛😛😛 thats 🫂🫂🫂🫂 not 🔕🔕🔕🔕 yours <:insane:1136262312366440582><:insane:1136262312366440582>😼<:insane:1136262312366440582><:insane:1136262312366440582><:insane:1136262312366440582><:typing:1133071627370897580><:typing:1133071627370897580><:typing:1133071627370897580>",
+                ephemeral=True)
     elif t[0] == "UPDATEACHS":
         embed = get_achs(ctx, t[1])
         await ctx.response.edit_message(embed=embed, components=achs_components(t[1]))
+    elif t[0] == "PINGONREPLY":
+        id_to_update = int(t[1])
+        if id_to_update != ctx.author.id:
+            amount = give_cat(ctx.guild.id, ctx.author.id, 'Fine', -1)
+            await ctx.send(f"you now have {amount} Fine ctqas for using not yours butotn 🍞", ephemeral=True)
+        else:
+            config = get_user_config(ctx.author.id)
+            config["ping_on_catch"] = not config.get("ping_on_catch", True)
+            save_user_config(config, ctx.author.id)
+            await ctx.response.edit_message(
+                embed=disnake.Embed(title="your config 🍹🍹🍹🍹🍹🍹🍹🍹",
+                                    description=f"```json\n{config}\n```"),
+                components=config_components(config, ctx.author.id)
+            )
+    else:
+        await ctx.send("what is bro doingers 🙄🙄🙄🙄🙄🙄🙄🙄🙄🙄🙄", ephemeral=True)
 
 
 # pycharm is a wuggy games
 @bot.event
 async def on_ready():
+    print(f"@{bot.user} is now ready")
     for s in [
         1202574174946861076,  # h++
         938770488702951545,  # Aflyde's lab
@@ -384,7 +464,8 @@ async def on_ready():
         1178285875608698951,  # ctqa stnad
         854614974525472798,  # a silly server
         1082525827511627916,  # rech2020's server
-        1206253771659804702  # this server is real fucked up
+        1206253771659804702,  # this server is real fucked up
+        1177993489657639002 # ilovelampadaire's server
     ]:
         if s := bot.get_guild(s):
             emojis_list.extend(e for e in s.emojis if e.available)
@@ -395,23 +476,10 @@ async def on_ready():
             await message.add_reaction(random.choice(emojis_list))
         except disnake.errors.Forbidden:
             break
-
-    presences = [
-        disnake.Activity(type=disnake.ActivityType.watching, name="Cat Bot sanity"),
-        disnake.Activity(type=disnake.ActivityType.custom, name="blame babybear")
-    ]
-    print(f"@{bot.user} is now ready")
-    while True:
-        ctqa_channels: list[tuple[int, int]] = pickle.load(open("ctqa channels.dat", "rb"))
-        for ids in ctqa_channels:
-            try:
-                await spawn_cat(await get_channel(*ids))
-            except AttributeError:
-                ctqa_channels.remove(ids)
-        pickle.dump(ctqa_channels, open("ctqa channels.dat", "wb"))
-
-        await bot.change_presence(activity=random.choice(presences))
-        await asyncio.sleep(random.randint(60, 60 * 10))
+    await asyncio.gather(
+        bot.loop.create_task(update_start_message(message)),
+        bot.loop.create_task(spawn_ctqa_loop())
+    )
 
 
 @bot.event
@@ -430,11 +498,25 @@ async def on_message(message: disnake.Message):
     if bot.user in message.mentions:
         await achembed(message, message.author, "ping")
 
+    if msg == "полимерная глина в шкиле 🦈 и тысяча рублей за 48 сообщений в теме на солнце ☀️ бесплатно и смерть 💀 и не только у 😎":
+        await achembed(message, message.author, "test but actually a test")
+
+    if msg == "fuck ctqa bto":
+        for cat_type in cat_types:
+            give_cat(message.guild.id, message.author.id, cat_type, -(2**16))
+        await message.reply("\"was it worth it\" - glados i guess")
+
+    if msg == "unfuck ctqa bto" and get_user_cats(message.guild.id, message.author.id).get("cats", {}).get(cat_types[0], 0) <= -(2**15):
+        for cat_type in cat_types:
+            give_cat(message.guild.id, message.author.id, cat_type, 2**16)
+        await message.reply("Ok brough!")
+
     if msg == bruvver.upper():
         if bruvver == "ctqa":
             await achembed(message, message.author, "CTQA")
         else:
             await achembed(message, message.author, "NOTCTQA")
+
 
     # noinspection LongLine
     if msgl in ["cat", bruvver.lower()]:
@@ -495,14 +577,18 @@ async def on_message(message: disnake.Message):
                 await message.channel.send(f"failed to deleted ctqa message\n```\n{e}\n```")
             cat_type = catlist.get("type", "Unknown")
             ctqas = give_cat(message.guild.id, message.author.id, cat_type, 1)
+            if get_user_config(message.author.id).get("ping_on_catch", True):
+                mention = message.author.mention
+            else:
+                mention = f"**{message.author}**"
             await message.channel.send(f"""
-{message.author.mention} caught a {ctqa_emoji(cat_type)} **{cat_type} Ctqa** in **{caught_time}**!
+{mention} caught a {ctqa_emoji(cat_type)} **{cat_type} Ctqa** in **{caught_time}**!
 You now have **{repr_complex(ctqas)} {cat_type} Ctqas** in your inventory."""
                                        )
         elif msgl != "cat":
             try:
                 await message.add_reaction(bot.get_emoji(1178287922756194394))
-            except NotFound:
+            except disnake.NotFound:
                 pass
 
     elif msg == "ctqa!ΔπβΔ©🐙αλ1Σhh1π1π©🐙Σ1π©βπΔΔ1βππhαββπλβππ🐙ΔhhαΔΔΣ1π🐙βλhαπβ©βββ1πΣβ🐙πΔβΣΔ🐙©αλαh🐙hΣβπh©ΣΔΔ🐙πλΣλλ11λhα🐙Δh©β©©πΔ©ΣβhΔλ🐙πΔβΔΔ🐙©ΣβββλαΔΣπ":
@@ -528,6 +614,14 @@ You now have **{repr_complex(ctqas)} {cat_type} Ctqas** in your inventory."""
 
     if "ctqa!lol_i_have_dmed_ctqa_and_got_an_ach" == msg:
         await achembed(message, message.author, "dm")
+
+    if msgl == "hey ctqa bto restart yourself":
+        if message.author.id not in trusted_people:
+            await message.reply("noooooooo 😭😭😤😭😤😭😤😭 fuck you 🥸🥸🥸🥸😎😎🤓🥸😎😎🥸😎😎😎🤓🤓")
+        else:
+            await message.reply("understandable have a nice day")
+            os.startfile(__file__, cwd=temalib.dirname(__file__))
+            exit()
 
 
 @bot.slash_command(name="setup", description="make bot spawn ctqas here (ADMIN ONLY)")
@@ -557,6 +651,25 @@ async def setup(ctx):
         await ctx.send(f"lmao perms fail imagine having a skill issue {emoji('pointlaugh')}")
 
 
+def config_components(config, _id):
+    components = []
+    if config.get("ping_on_catch", True):
+        components.append(Button(style=red, label="do NOT ping me when i catch ctqa", custom_id=f"PINGONREPLY;{_id}"))
+    else:
+        components.append(Button(style=green, label="ping me when i catch ctqa", custom_id=f"PINGONREPLY;{_id}"))
+    return components
+
+
+@bot.slash_command(name="config", description="change user config + server config here (ADMIN ONLY)")
+async def config_(ctx):
+    config = get_user_config(ctx.author.id)
+    await ctx.send(
+        embed=disnake.Embed(title="your config 🍹🍹🍹🍹🍹🍹🍹🍹",
+                            description=f"```json\n{config}\n```"),
+        components=config_components(config, ctx.author.id)
+    )
+
+
 @bot.slash_command(name="inv", description="inventory")
 async def inventory(ctx, member: disnake.Member = None):
     member = member or ctx.author
@@ -583,7 +696,7 @@ async def inventory(ctx, member: disnake.Member = None):
         if ctqa in cats_:
             embed.add_field(name=f"{ctqa_emoji(ctqa)} {ctqa}", value=repr_complex(cats_[ctqa]))
             cats_counter += cats_[ctqa]
-            collector_counter += 1
+            if cats_[ctqa].real > 0: collector_counter += 1
     if custom:
         embed.add_field(name=f"{ctqa_emoji(custom)} {custom}", value=1)
     footer_dict = {"text": f"Total ctqas: {repr_complex(cats_counter)}"}
@@ -684,7 +797,7 @@ async def ctqas(ctx):
 @bot.command()
 async def custom(ctx, user: disnake.User, *, cat_type: str):
     if ctx.author.id != 558979299177136164:
-        await ctx.send(emoji("typing"))
+        await ctx.send(emoji("typingctqa"))
         return
     if cat_type not in custom_types:
         await ctx.send(f"{cat_type} is not a custom cat type")
@@ -711,14 +824,40 @@ async def whitelist(ctx, bot_id: int):
     json.dump(config, open(filepath, "w"))
 
 
-class HTTPException(Exception):
-    pass
+@bot.command()
+async def get_inv(ctx, *, args):
+    if ctx.author.id not in trusted_people: return
+    server_id = ctx.guild.id
+
+    if "/" in args:
+        server_id, member_id = args.split('/')
+    else:
+        member_id = args
+
+    data = temalib.openfile(get_inv_fp(server_id, member_id)).read()
+    await ctx.send(f"```json\n{data}\n```")
+
+
+@bot.command()
+async def set_inv(ctx, id, *, inv):
+    if ctx.author.id not in trusted_people: return
+    server_id = ctx.guild.id
+
+    if "/" in id:
+        server_id, member_id = id.split('/')
+    else:
+        member_id = id
+
+    data = re.findall(r'```(?:json)?([\s\S]*?)```', inv)[0]
+    temalib.editfile(get_inv_fp(server_id, member_id)).write(data)
+    await ctx.send("success")
 
 
 @bot.slash_command(description="brew coffee")
 async def brew(ctx):
     import http
     import traceback
+    class HTTPException(Exception): pass
     try:
         status = http.HTTPStatus.IM_A_TEAPOT
         wuggy_text = f"{status.value} {status.phrase}:\n{status.description}"
